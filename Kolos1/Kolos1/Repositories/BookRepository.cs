@@ -76,8 +76,8 @@ public class BookRepository
     public async Task addBook(NewBookDTO newBookDto)
     {
 
-        var query = "Insert into books values (@title); SELECT @@identity as Bookid; " +
-                    "INSERT into authors values (@firstName, @lastName);  SELECT @@identity as Authorid;";
+        var query = "Insert into books values (@title); SELECT @@identity as bookID; ";
+                    
         
         await using SqlConnection connection = new SqlConnection(_configuration.GetConnectionString("Default"));
         await using SqlCommand command = new SqlCommand();
@@ -85,13 +85,41 @@ public class BookRepository
         command.Connection = connection;
         command.CommandText = query;
         command.Parameters.AddWithValue("@title", newBookDto.title);
-        command.Parameters.AddWithValue("@title", );
-        command.Parameters.AddWithValue("@title", newBookDto.title);
-  
         
         await connection.OpenAsync();
-        
-        await command.ExecuteNonQueryAsync();
+
+        //var id1 = bookID;
+        var transaction = await connection.BeginTransactionAsync();
+        command.Transaction = transaction as SqlTransaction;
+
+        try
+        {
+            var id = await command.ExecuteScalarAsync();
+            foreach (var author in newBookDto.authors)
+            {
+                command.Parameters.Clear();
+                command.CommandText = "INSERT into authors values (@firstName, @lastName);  SELECT @@identity as AuthorID";
+                    command.Parameters.AddWithValue("@firstName", author.firstName);
+                command.Parameters.AddWithValue("@lastName", author.lastName );
+                
+                await command.ExecuteNonQueryAsync();
+                
+                command.Parameters.Clear();
+                command.CommandText = "INSERT into books_authors values(@bookID1, @authorID1)";
+                //command.Parameters.AddWithValue("@bookID1", id1 );
+                //command.Parameters.AddWithValue("@authorID1", AuthorID );
+                
+                
+                await command.ExecuteNonQueryAsync();
+            }
+
+            await transaction.CommitAsync();
+        }
+        catch(Exception)
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
     }
     
     
